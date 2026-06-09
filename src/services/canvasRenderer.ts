@@ -624,3 +624,227 @@ export function createPreviewCanvas(
   renderToCanvas(canvas, data, style, scaledConfig).catch(console.error);
   return canvas;
 }
+
+interface CompareLayoutInfo {
+  leftLayout: LayoutInfo;
+  rightLayout: LayoutInfo;
+  totalWidth: number;
+  totalHeight: number;
+  separatorX: number;
+}
+
+function calculateCompareLayout(
+  data1: ProcessedData,
+  data2: ProcessedData,
+  exportConfig: ExportConfig
+): CompareLayoutInfo {
+  const leftLayout = calculateLayout(data1, exportConfig);
+  const rightLayout = calculateLayout(data2, exportConfig);
+  const separatorGap = 60;
+  const totalWidth = exportConfig.width * 2 + separatorGap;
+  const totalHeight = Math.max(leftLayout.totalHeight, rightLayout.totalHeight);
+  const separatorX = exportConfig.width + separatorGap / 2;
+
+  return {
+    leftLayout,
+    rightLayout,
+    totalWidth,
+    totalHeight,
+    separatorX,
+  };
+}
+
+function drawCompareHeader(
+  ctx: CanvasRenderingContext2D,
+  data1: ProcessedData,
+  data2: ProcessedData,
+  style: StyleConfig,
+  exportConfig: ExportConfig,
+  layout: CompareLayoutInfo
+): void {
+  const { padding, width } = exportConfig;
+  const leftCenterX = width / 2;
+  const rightCenterX = width + 60 + width / 2;
+
+  ctx.fillStyle = style.textColor;
+  ctx.font = `bold ${exportConfig.cellSize * 2.2}px ${style.fontFamily.title}`;
+  ctx.textAlign = 'center';
+
+  ctx.fillStyle = '#60a5fa';
+  ctx.fillText(
+    `${data1.displayName} 的代码贡献纪年`,
+    leftCenterX,
+    padding.top + exportConfig.cellSize * 2
+  );
+
+  ctx.fillStyle = '#fb7185';
+  ctx.fillText(
+    `${data2.displayName} 的代码贡献纪年`,
+    rightCenterX,
+    padding.top + exportConfig.cellSize * 2
+  );
+
+  ctx.fillStyle = style.secondaryTextColor;
+  ctx.font = `${exportConfig.cellSize * 1.1}px ${style.fontFamily.body}`;
+
+  const dateRange1 = `${data1.days[0].date} ~ ${data1.days[data1.days.length - 1].date}`;
+  const dateRange2 = `${data2.days[0].date} ~ ${data2.days[data2.days.length - 1].date}`;
+
+  ctx.fillText(`@${data1.username} · ${dateRange1}`, leftCenterX, padding.top + exportConfig.cellSize * 3.8);
+  ctx.fillText(`@${data2.username} · ${dateRange2}`, rightCenterX, padding.top + exportConfig.cellSize * 3.8);
+}
+
+function drawCompareGrid(
+  ctx: CanvasRenderingContext2D,
+  _data1: ProcessedData,
+  _data2: ProcessedData,
+  style: StyleConfig,
+  exportConfig: ExportConfig,
+  layout: CompareLayoutInfo
+): void {
+  const { padding, width } = exportConfig;
+
+  const leftPadding = { ...padding };
+  drawGrid(ctx, layout.leftLayout, style, leftPadding);
+
+  ctx.save();
+  ctx.translate(width + 60, 0);
+  const rightPadding = { ...padding };
+  drawGrid(ctx, layout.rightLayout, style, rightPadding);
+  ctx.restore();
+}
+
+function drawCompareStats(
+  ctx: CanvasRenderingContext2D,
+  data1: ProcessedData,
+  data2: ProcessedData,
+  style: StyleConfig,
+  exportConfig: ExportConfig,
+  layout: CompareLayoutInfo
+): void {
+  const { padding, width } = exportConfig;
+
+  drawStats(ctx, data1, style, layout.leftLayout, exportConfig);
+
+  ctx.save();
+  ctx.translate(width + 60, 0);
+  drawStats(ctx, data2, style, layout.rightLayout, exportConfig);
+  ctx.restore();
+}
+
+function drawCompareSeparator(
+  ctx: CanvasRenderingContext2D,
+  data1: ProcessedData,
+  data2: ProcessedData,
+  style: StyleConfig,
+  exportConfig: ExportConfig,
+  layout: CompareLayoutInfo
+): void {
+  const { totalHeight, separatorX } = layout;
+
+  const gradient = ctx.createLinearGradient(separatorX, 0, separatorX, totalHeight);
+  gradient.addColorStop(0, 'transparent');
+  gradient.addColorStop(0.3, style.accentColor + '40');
+  gradient.addColorStop(0.5, style.accentColor);
+  gradient.addColorStop(0.7, style.accentColor + '40');
+  gradient.addColorStop(1, 'transparent');
+
+  ctx.strokeStyle = gradient;
+  ctx.lineWidth = 2;
+  ctx.setLineDash([8, 4]);
+  ctx.beginPath();
+  ctx.moveTo(separatorX, 40);
+  ctx.lineTo(separatorX, totalHeight - 40);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  const total1 = data1.stats.totalContributions;
+  const total2 = data2.stats.totalContributions;
+  const diff = Math.abs(total1 - total2);
+  const winner = total1 > total2 ? data1.displayName : (total2 > total1 ? data2.displayName : null);
+
+  if (winner) {
+    ctx.fillStyle = style.accentColor;
+    ctx.font = `bold ${exportConfig.cellSize * 1.3}px ${style.fontFamily.title}`;
+    ctx.textAlign = 'center';
+    ctx.fillText('VS', separatorX, totalHeight / 2 - 10);
+
+    ctx.font = `${exportConfig.cellSize * 0.9}px ${style.fontFamily.body}`;
+    ctx.fillStyle = style.textColor;
+    ctx.fillText(`${winner} 领先`, separatorX, totalHeight / 2 + 15);
+    ctx.fillStyle = style.accentColor;
+    ctx.fillText(`+${diff.toLocaleString()}`, separatorX, totalHeight / 2 + 35);
+  } else {
+    ctx.fillStyle = style.accentColor;
+    ctx.font = `bold ${exportConfig.cellSize * 1.3}px ${style.fontFamily.title}`;
+    ctx.textAlign = 'center';
+    ctx.fillText('VS', separatorX, totalHeight / 2 - 10);
+    ctx.fillStyle = style.textColor;
+    ctx.font = `${exportConfig.cellSize * 0.9}px ${style.fontFamily.body}`;
+    ctx.fillText('势均力敌', separatorX, totalHeight / 2 + 15);
+  }
+}
+
+function drawCompareBackground(
+  ctx: CanvasRenderingContext2D,
+  style: StyleConfig,
+  width: number,
+  height: number
+): void {
+  ctx.fillStyle = style.background.color;
+  ctx.fillRect(0, 0, width, height);
+
+  if (style.background.texture === 'paper') {
+    const pattern = generatePaperTexture(ctx, width, height);
+    if (pattern) {
+      ctx.fillStyle = pattern;
+      ctx.fillRect(0, 0, width, height);
+    }
+  } else if (style.background.texture === 'noise') {
+    const pattern = generateNoiseTexture(ctx, width, height);
+    if (pattern) {
+      ctx.fillStyle = pattern;
+      ctx.fillRect(0, 0, width, height);
+    }
+  } else if (style.background.texture === 'scanline') {
+    const pattern = generateScanlineTexture(ctx, width, height);
+    if (pattern) {
+      ctx.fillStyle = pattern;
+      ctx.fillRect(0, 0, width, height);
+    }
+  }
+}
+
+export async function renderCompareToCanvas(
+  canvas: HTMLCanvasElement,
+  data1: ProcessedData,
+  data2: ProcessedData,
+  style: StyleConfig,
+  exportConfig: ExportConfig
+): Promise<void> {
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('无法获取 Canvas 上下文');
+
+  const layout = calculateCompareLayout(data1, data2, exportConfig);
+
+  canvas.width = layout.totalWidth;
+  canvas.height = layout.totalHeight;
+
+  drawCompareBackground(ctx, style, layout.totalWidth, layout.totalHeight);
+
+  drawCompareHeader(ctx, data1, data2, style, exportConfig, layout);
+  drawCompareGrid(ctx, data1, data2, style, exportConfig, layout);
+  drawCompareStats(ctx, data1, data2, style, exportConfig, layout);
+  drawCompareSeparator(ctx, data1, data2, style, exportConfig, layout);
+
+  ctx.fillStyle = style.secondaryTextColor;
+  ctx.font = `${exportConfig.cellSize * 0.7}px ${style.fontFamily.body}`;
+  ctx.textAlign = 'center';
+  ctx.globalAlpha = 0.6;
+  ctx.fillText(
+    `Generated by GitHub Contribution Art · ${new Date().toLocaleDateString()}`,
+    layout.totalWidth / 2,
+    layout.totalHeight - exportConfig.padding.bottom / 2
+  );
+  ctx.globalAlpha = 1;
+}

@@ -1,18 +1,32 @@
 import { useEffect, useRef, useState } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { getStyleConfig, getExportConfig } from '../config/styles';
-import { renderToCanvas } from '../services/canvasRenderer';
+import { renderToCanvas, renderCompareToCanvas } from '../services/canvasRenderer';
 import { Loader2, ZoomIn, ZoomOut } from 'lucide-react';
 
 export function PreviewCanvas() {
-  const { contributionData, selectedStyle, loadingStatus } = useAppStore();
+  const {
+    contributionData,
+    contributionData2,
+    selectedStyle,
+    loadingStatus,
+    loadingStatus2,
+    compareMode,
+    errorMessage,
+    errorMessage2,
+  } = useAppStore();
+
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [isRendering, setIsRendering] = useState(false);
-  const [zoom, setZoom] = useState(0.6);
+  const [zoom, setZoom] = useState(0.4);
 
   useEffect(() => {
-    if (loadingStatus !== 'success' || !contributionData) return;
+    if (compareMode === 'single') {
+      if (loadingStatus !== 'success' || !contributionData) return;
+    } else {
+      if (loadingStatus !== 'success' || loadingStatus2 !== 'success' || !contributionData || !contributionData2) return;
+    }
 
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -24,7 +38,8 @@ export function PreviewCanvas() {
         const baseConfig = getExportConfig('hd');
 
         const containerWidth = containerRef.current?.clientWidth || 800;
-        const scale = Math.min(zoom, (containerWidth - 40) / baseConfig.width);
+        const effectiveWidth = compareMode === 'compare' ? baseConfig.width * 2 + 60 : baseConfig.width;
+        const scale = Math.min(zoom, (containerWidth - 40) / effectiveWidth);
 
         const scaledConfig = {
           ...baseConfig,
@@ -39,7 +54,11 @@ export function PreviewCanvas() {
           },
         };
 
-        await renderToCanvas(canvas, contributionData, style, scaledConfig);
+        if (compareMode === 'compare' && contributionData && contributionData2) {
+          await renderCompareToCanvas(canvas, contributionData, contributionData2, style, scaledConfig);
+        } else if (contributionData) {
+          await renderToCanvas(canvas, contributionData, style, scaledConfig);
+        }
       } catch (error) {
         console.error('Render error:', error);
       } finally {
@@ -48,9 +67,25 @@ export function PreviewCanvas() {
     };
 
     render();
-  }, [contributionData, selectedStyle, zoom]);
+  }, [contributionData, contributionData2, selectedStyle, zoom, compareMode, loadingStatus, loadingStatus2]);
 
-  if (loadingStatus === 'idle') {
+  const isLoading = compareMode === 'single'
+    ? loadingStatus === 'loading'
+    : (loadingStatus === 'loading' || loadingStatus2 === 'loading');
+
+  const isError = compareMode === 'single'
+    ? loadingStatus === 'error'
+    : (loadingStatus === 'error' || loadingStatus2 === 'error');
+
+  const isIdle = compareMode === 'single'
+    ? loadingStatus === 'idle'
+    : (loadingStatus === 'idle' && loadingStatus2 === 'idle');
+
+  const isSuccess = compareMode === 'single'
+    ? loadingStatus === 'success'
+    : (loadingStatus === 'success' && loadingStatus2 === 'success');
+
+  if (isIdle) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center bg-zinc-950 rounded-lg border border-zinc-800 border-dashed p-8">
         <div className="text-6xl mb-4">🎨</div>
@@ -64,7 +99,7 @@ export function PreviewCanvas() {
     );
   }
 
-  if (loadingStatus === 'loading') {
+  if (isLoading) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center bg-zinc-950 rounded-lg border border-zinc-800 p-8">
         <Loader2 className="w-12 h-12 text-amber-500 animate-spin mb-4" />
@@ -72,19 +107,19 @@ export function PreviewCanvas() {
           正在获取数据...
         </h3>
         <p className="text-sm text-zinc-500">
-          从 GitHub API 获取贡献数据中，请稍候
+          {compareMode === 'compare' ? '正在获取两位用户的贡献数据中，请稍候' : '从 GitHub API 获取贡献数据中，请稍候'}
         </p>
       </div>
     );
   }
 
-  if (loadingStatus === 'error') {
+  if (isError) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center bg-zinc-950 rounded-lg border border-red-900/50 p-8">
         <div className="text-6xl mb-4">😔</div>
         <h3 className="text-lg font-medium text-red-400 mb-2">获取数据失败</h3>
         <p className="text-sm text-zinc-500 text-center max-w-sm">
-          {useAppStore.getState().errorMessage || '请检查用户名或网络连接后重试'}
+          {errorMessage || errorMessage2 || '请检查用户名或网络连接后重试'}
         </p>
       </div>
     );
@@ -101,13 +136,13 @@ export function PreviewCanvas() {
             style={{ backgroundColor: style.accentColor }}
           />
           <span className="text-sm font-medium text-zinc-300">
-            {style.name} 风格预览
+            {style.name} 风格预览 {compareMode === 'compare' && '· 对比模式'}
           </span>
         </div>
         <div className="flex items-center gap-1">
           <button
             type="button"
-            onClick={() => setZoom(Math.max(0.3, zoom - 0.1))}
+            onClick={() => setZoom(Math.max(0.2, zoom - 0.05))}
             className="p-1.5 rounded hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 transition-colors"
             title="缩小"
           >
@@ -118,7 +153,7 @@ export function PreviewCanvas() {
           </span>
           <button
             type="button"
-            onClick={() => setZoom(Math.min(1.5, zoom + 0.1))}
+            onClick={() => setZoom(Math.min(1, zoom + 0.05))}
             className="p-1.5 rounded hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 transition-colors"
             title="放大"
           >

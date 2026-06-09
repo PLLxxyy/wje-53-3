@@ -105,13 +105,29 @@ export interface RateLimitInfo {
 }
 
 export type LoadingStatus = 'idle' | 'loading' | 'success' | 'error';
+export type CompareMode = 'single' | 'compare';
+
+export interface ComparisonStats {
+  totalDiff: number;
+  totalDiffPercent: number;
+  longestStreakDiff: number;
+  currentStreakDiff: number;
+  mostActiveMonthDiff: number;
+  maxContributionsDiff: number;
+  winner: 'left' | 'right' | 'tie';
+}
 
 export interface AppState {
   username: string;
+  username2: string;
   loadingStatus: LoadingStatus;
+  loadingStatus2: LoadingStatus;
   contributionData: ProcessedData | null;
+  contributionData2: ProcessedData | null;
   selectedStyle: StyleId;
   exportResolution: 'hd' | 'fullhd' | 'print';
   errorMessage: string | null;
+  errorMessage2: string | null;
   rateLimitInfo: RateLimitInfo | null;
+  compareMode: CompareMode;
 }

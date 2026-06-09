@@ -7,26 +7,35 @@ import { Download, Copy, Check, Loader2, FileImage } from 'lucide-react';
 export function DownloadPanel() {
   const {
     contributionData,
+    contributionData2,
     selectedStyle,
     exportResolution,
     setExportResolution,
     loadingStatus,
+    loadingStatus2,
+    compareMode,
   } = useAppStore();
 
   const [isDownloading, setIsDownloading] = useState(false);
   const [isCopying, setIsCopying] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  const isDisabled = loadingStatus !== 'success' || !contributionData;
+  const isDisabled = compareMode === 'single'
+    ? (loadingStatus !== 'success' || !contributionData)
+    : (loadingStatus !== 'success' || loadingStatus2 !== 'success' || !contributionData || !contributionData2);
+
+  const exportData = compareMode === 'compare' && contributionData && contributionData2
+    ? [contributionData, contributionData2]
+    : contributionData;
 
   const handleDownload = async () => {
-    if (!contributionData || isDisabled) return;
+    if (!exportData || isDisabled) return;
 
     setIsDownloading(true);
     try {
       const style = getStyleConfig(selectedStyle);
       const config = getExportConfig(exportResolution);
-      await downloadImage(contributionData, style, config);
+      await downloadImage(exportData as any, style, config);
     } catch (error) {
       console.error('Download error:', error);
     } finally {
@@ -35,13 +44,13 @@ export function DownloadPanel() {
   };
 
   const handleCopy = async () => {
-    if (!contributionData || isDisabled) return;
+    if (!exportData || isDisabled) return;
 
     setIsCopying(true);
     try {
       const style = getStyleConfig(selectedStyle);
       const config = getExportConfig(exportResolution);
-      const success = await copyImageToClipboard(contributionData, style, config);
+      const success = await copyImageToClipboard(exportData as any, style, config);
       if (success) {
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
@@ -53,15 +62,17 @@ export function DownloadPanel() {
     }
   };
 
-  const estimatedSize = contributionData
-    ? estimateFileSize(getExportConfig(exportResolution), contributionData)
+  const estimatedSize = exportData
+    ? estimateFileSize(getExportConfig(exportResolution), exportData as any)
     : '—';
 
   return (
     <div className="w-full space-y-3">
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-medium text-zinc-300">导出设置</h3>
-        <span className="text-xs text-zinc-600">高清长图</span>
+        <span className="text-xs text-zinc-600">
+          {compareMode === 'compare' ? '对比长图' : '高清长图'}
+        </span>
       </div>
 
       <div className="space-y-2">

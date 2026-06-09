@@ -7,13 +7,16 @@ import {
   DownloadPanel,
   RateLimitWarning,
 } from '../components';
+import { useAppStore } from '../store/useAppStore';
 
 export default function Home() {
+  const { compareMode } = useAppStore();
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-zinc-950 via-zinc-900/50 to-zinc-950">
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-amber-500/5 via-transparent to-transparent pointer-events-none" />
 
-      <div className="relative max-w-7xl mx-auto px-4 py-8 lg:py-12">
+      <div className={`relative mx-auto px-4 py-8 lg:py-12 ${compareMode === 'compare' ? 'max-w-[1600px]' : 'max-w-7xl'}`}>
         <header className="text-center mb-8">
           <div className="inline-flex items-center gap-2 px-4 py-2 bg-amber-500/10 rounded-full border border-amber-500/20 mb-4">
             <Sparkles className="w-4 h-4 text-amber-500" />
@@ -25,7 +28,9 @@ export default function Home() {
             </span>
           </h1>
           <p className="text-zinc-400 text-lg max-w-2xl mx-auto">
-            把 365 天的代码提交转化为精美的艺术长图，记录你的开源历程
+            {compareMode === 'compare'
+              ? '对比两位开发者的代码贡献历程，看看谁更勤奋'
+              : '把 365 天的代码提交转化为精美的艺术长图，记录你的开源历程'}
           </p>
         </header>
 
